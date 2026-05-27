@@ -150,7 +150,7 @@ function pnWoutSD(datas){
   const indexCleTableauPN = 53;
   const indexCleTableauSoluce = 64;
 
-  const indiceColonneALierSoluce = 53;
+  const indiceColonneALierSoluce = 55;
 
   const indexDonnees = new Map();
   
