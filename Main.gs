@@ -9,7 +9,7 @@ function import_extract() {
   Un fois les filtres faits, tout est envoyé dans la BDD avec la date en première colonne puis le Looker est connecté à chaque onglet pour afficher les données.
   ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
   
-  updateLookerStudioSources();
+  //updateLookerStudioSources();
 
   var ss = SpreadsheetApp.getActiveSpreadsheet(); // Récupération du tableur actif
   var database = SpreadsheetApp.openById("1W0_NpL4E8Lmd_PED9U4tygL0bfsNVzurvTcNzijcgkU"); // Ouverture de la base de données
@@ -61,7 +61,7 @@ function import_extract() {
     //Zone de test avant les autres filtres
 
 
-
+    var pnSsSd = pnWoutSD(datas);
 
 
 
@@ -78,7 +78,7 @@ function import_extract() {
     //case without PN
       var case_without_PN_filtered = case_wout_PN(datas);
 
-      pastInMain("Cases without PN", "A2:DG", case_without_PN_filtered);
+      pastInMain("Cases without PN", "A2:DH", case_without_PN_filtered);
 
       pushInTotal(case_without_PN_filtered, total, 50, 51, 1, "Cases without PN", 41);
 
@@ -86,7 +86,7 @@ function import_extract() {
     //PN in two categories
       /*var pnIn2Cat = pn_in_two_cat(datas);
 
-      pastInMain("PN in two categories (Mat & IG ou Equip)", "A2:DG", pnIn2Cat);
+      pastInMain("PN in two categories (Mat & IG ou Equip)", "A2:DH", pnIn2Cat);
 
       pushInTotal(pnIn2Cat, total, 49, 50, 1, "PN in two categories");*/
       
@@ -108,7 +108,7 @@ function import_extract() {
       
       var total_case_eol = lbotest(datas);
 
-      pastInMain("OG4-OG5 status check", "A2:CV", total_case_eol);
+      pastInMain("OG4-OG5 status check", "A2:CW", total_case_eol);
 
       pushInTotal(total_case_eol, total, 50, 51, 1, "OG4-OG5 status check", 41);
 
@@ -125,7 +125,7 @@ function import_extract() {
       
       merge_scenario_empty.push(...scenario_not_applied_filtered, ...no_solution);
 
-      pastInMain("OG4-OG5 cases without scenario (not applied)", "A2:CV", merge_scenario_empty);
+      pastInMain("OG4-OG5 cases without scenario (not applied)", "A2:CW", merge_scenario_empty);
 
       pushInTotal(merge_scenario_empty, total, 50, 51, 1, "OG4-OG5 cases without scenario (not applied)", 41);
 
@@ -143,7 +143,7 @@ function import_extract() {
 
       var case_category_code_filtered = case_wout_category_code(datas);
 
-      pastInMain("Case_category code (empty)", "A2:CV", case_category_code_filtered);
+      pastInMain("Case_category code (empty)", "A2:CW", case_category_code_filtered);
 
       pushInTotal(case_category_code_filtered, total, 50, 51, 1, "Cases without category code", 41);
 
@@ -151,7 +151,7 @@ function import_extract() {
     
       var pn_not_SAP = pn_not_in_SAP(datas);
 
-      pastInMain("PN not in SAP", "A2:DG", pn_not_SAP);
+      pastInMain("PN not in SAP", "A2:DH", pn_not_SAP);
 
       pushInTotal(pn_not_SAP, total, 50, 51, 1, "PN not in SAP", 41);
 
@@ -160,7 +160,7 @@ function import_extract() {
 
       var date_obsolete_component = obsolete_component(datas);
 
-      pastInMain("Wrong info in Obsolete_component", "A2:DG", date_obsolete_component);
+      pastInMain("Wrong info in Obsolete_component", "A2:DH", date_obsolete_component);
 
       pushInTotal(date_obsolete_component, total, 50, 51, 1, "Obsolete_component not standardized", 41);
 
@@ -169,7 +169,7 @@ function import_extract() {
 
       var case_summary_data = case_summary(datas);
 
-      pastInMain("Case_summary empty", "A2:BZ", case_summary_data);
+      pastInMain("Case_summary empty", "A2:CA", case_summary_data);
 
       pushInTotal(case_summary_data, total, 50, 51, 1, "Case_summary not standardised", 41);
 
@@ -178,7 +178,7 @@ function import_extract() {
 
       /*var lbo_nogo_repair_data = lbo_nogo_repair_OG5(datas); // Done into LBO check
 
-      pastInMain("LBO NOGO Repair OG5 in SOLVED", "A2:CV", lbo_nogo_repair_data);
+      pastInMain("LBO NOGO Repair OG5 in SOLVED", "A2:CW", lbo_nogo_repair_data);
 
       pushInTotal(lbo_nogo_repair_data, total, 49, 50, 1, "LBO NOGO REPAIR with case in solved status");*/
 
@@ -186,7 +186,7 @@ function import_extract() {
 
       var case_cause_code_data = case_cause_code(datas);
 
-      pastInMain("Case_cause_code (empty)", "A2:BZ", case_cause_code_data);
+      pastInMain("Case_cause_code (empty)", "A2:CA", case_cause_code_data);
 
       pushInTotal(case_cause_code_data, total, 50, 51, 1, "Case_cause_code (empty)", 41);
 
@@ -194,7 +194,7 @@ function import_extract() {
 
       /*var notif_date_futur_data = case_notif_date_futur(datas);
 
-      pastInMain("Case_notif_date_futur", "A2:BZ", notif_date_futur_data);
+      pastInMain("Case_notif_date_futur", "A2:CA", notif_date_futur_data);
 
       pushInTotal(notif_date_futur_data, total, 49, 50, 1, "Case_notif_date_futur", 40);*/
 
@@ -202,7 +202,7 @@ function import_extract() {
 
       /*var lbo_deadline_data = lbo_deadline(datas);
 
-      pastInMain("LBO_deadline", "A2:CV", lbo_deadline_data);
+      pastInMain("LBO_deadline", "A2:CW", lbo_deadline_data);
 
       pushInTotal(lbo_deadline_data, total, 49, 50, 1, "LBO_deadline");*/
 
@@ -210,7 +210,7 @@ function import_extract() {
 
       /*var solution_state_data = solution_state(datas);
 
-      pastInMain("Solution_state", "A2:CV", solution_state_data);
+      pastInMain("Solution_state", "A2:CW", solution_state_data);
 
       pushInTotal(solution_state_data, total, 49, 50, 1, "Solution_state");*/
 
@@ -218,7 +218,7 @@ function import_extract() {
     
       /*var case_last_modif_date_data = case_last_modif_date(datas);
 
-      pastInMain("Case_last_modif_date", "A2:BZ", case_last_modif_date_data);
+      pastInMain("Case_last_modif_date", "A2:CA", case_last_modif_date_data);
 
       pushInTotal(case_last_modif_date_data, total, 49, 50, 1, "Case_last_modif_date");*/
 
@@ -227,7 +227,7 @@ function import_extract() {
       
       var supplier_notif_data = supplier_notif(datas);
 
-      pastInMain("supplier_notif", "A2:BZ", supplier_notif_data);
+      pastInMain("supplier_notif", "A2:CA", supplier_notif_data);
 
       pushInTotal(supplier_notif_data, total, 50, 51, 1, "supplier_notif_empty", 41);
 
@@ -235,7 +235,7 @@ function import_extract() {
 
       var not_updated = statusToBeUpdated(datas);
 
-      pastInMain("Not updated", "A2:CV", not_updated);
+      pastInMain("Not updated", "A2:CW", not_updated);
 
       pushInTotal(not_updated, total, 50, 51, 1, "Scenario not updated", 41);
 
