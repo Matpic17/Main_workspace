@@ -102,7 +102,7 @@ function envoyerRapportPersonnaliseParMail() {
         htmlBody: corpsDuMail,
         inlineImages: { logoRapport: imageFelicitation }
       };
-      GmailApp.createDraft(destinataire, sujet, "", options);
+      GmailApp.sendEmail(destinataire, sujet, "", options);
       Logger.log(`Mail de félicitation envoyé avec succès pour ${name} (${destinataire}).`);
 
     };
@@ -163,7 +163,7 @@ function envoyerRapportPersonnaliseParMail() {
           htmlBody: corpsDuMail,
           inlineImages: { logoRapport: imageBlob }
         };
-        GmailApp.createDraft(destinataire, sujet, "", options);
+        GmailApp.sendEmail(destinataire, sujet, "", options);
         Logger.log(`Mail envoyé avec succès pour ${personne} (${destinataire}).`);
       } catch (e) {
         Logger.log(`ERREUR lors de la création du brouillon pour ${personne} : ${e.message}`);
@@ -201,7 +201,7 @@ function envoyerRapportPersonnaliseParMail() {
       htmlBody: corpsDuMail,
       inlineImages: { logoRapport: imageBlob }
     };
-    GmailApp.createDraft(EMAIL_RECAP_GLOBAL, sujet, "", options);
+    GmailApp.sendEmail(EMAIL_RECAP_GLOBAL, sujet, "", options);
     Logger.log(`Mail envoyé avec succès à Florent.`);
   } catch (e) {
     Logger.log(`ERREUR lors de l'envoi de l'e-mail à Florent : ${e.message}`);
