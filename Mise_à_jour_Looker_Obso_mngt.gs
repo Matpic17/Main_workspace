@@ -51,7 +51,7 @@ const DISPATCH_CONFIG = {
   "action_solution_pn": {
     fileId: "1ylGxsGkG5Yata2ft-oRjNCX4Swn9_RNgGEa8xvh_MaA",
     useFirstTab: true,
-    sourceTabName: "Sheet1"
+    sourceTabName: "SOLUTIONS-ACTIONS > PN-VENDORS"
   },
   "case_program_variant": {
     fileId: "1SBIPB9v2-2EOmWdWcVeqqunhumiK8pGGNSuIegJgm5A",
