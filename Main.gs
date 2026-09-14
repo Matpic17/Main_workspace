@@ -8,8 +8,8 @@ function import_extract() {
   
   Un fois les filtres faits, tout est envoyé dans la BDD avec la date en première colonne puis le Looker est connecté à chaque onglet pour afficher les données.
   ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-  
-  //updateLookerStudioSources();
+
+  updateLookerStudioSources();
 
   var ss = SpreadsheetApp.getActiveSpreadsheet(); // Récupération du tableur actif
   var database = SpreadsheetApp.openById("1W0_NpL4E8Lmd_PED9U4tygL0bfsNVzurvTcNzijcgkU"); // Ouverture de la base de données
@@ -61,7 +61,6 @@ function import_extract() {
     //Zone de test avant les autres filtres
 
 
-    var pnSsSd = pnWoutSD(datas);
 
 
 
@@ -369,10 +368,12 @@ function import_extract() {
 
 function pastInMain(onglet, range, data){
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  let ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  let lastRowMain = ss.getSheetByName(onglet).getLastRow() == 0 ? 2 : ss.getSheetByName(onglet).getLastRow();
 
   //Cleaning des données
-  ss.getSheetByName(onglet).getRange(range + ss.getSheetByName(onglet).getLastRow()).clearContent();
+  ss.getSheetByName(onglet).getRange(range + lastRowMain).clearContent();
 
   //Vérif si il y a des données dans la variable, si oui, on colle dans le fichier
   if(data.length != 0){
@@ -496,9 +497,9 @@ function update_WIP_Routine(datas) {
 
   // Dictionnaire des équipes
   const TEAMS_MAP = {
-    "BOOS": "TIGER", "ESCHBACH": "TIGER", "SINGH": "TIGER", "Schreiber": "TIGER", "REITER": "TIGER", "PICAUD": "TIGER",
-    "NAMSI": "EQUIPMENT", "BACH": "EQUIPMENT", "ALEXANDRE": "EQUIPMENT", "Maire": "EQUIPMENT", "HAEUSSLER": "EQUIPMENT", "BLANCHET": "EQUIPMENT", "LORENZINI": "EQUIPMENT", "TRAMIER": "EQUIPMENT", "SOUIDI": "EQUIPMENT", "RIHANI": "EQUIPMENT", "Parot": "EQUIPMENT", "SELMI": "EQUIPMENT", "GODINEAU": "EQUIPMENT", "MEUNIER": "EQUIPMENT", "FOUQUET": "EQUIPMENT", "BARBIER": "EQUIPMENT", "MULLER": "EQUIPMENT", "SAINTOT": "EQUIPMENT",
-    "CROSNIER": "NH90", "SIMON": "NH90", "CHARLES": "NH90", "GARZETTI": "NH90", "COVES": "NH90", "VONGSAY": "NH90", "Namsi": "NH90", "HERAUD": "NH90", "PAYAN": "NH90", "NAYL": "NH90", "CHEVALIER": "NH90", "GRANDREMY": "NH90", "AUBRIS": "NH90", "CHEVALIER-JAGOT": "NH90", "SARINENA": "NH90",
+    "BOOS": "TIGER", "ESCHBACH": "TIGER", "SINGH": "TIGER", "SCHREIBER": "TIGER", "REITER": "TIGER", "PICAUD": "TIGER", "KOLLER": "TIGER", "LAURENT-PEAN": "TIGER",
+    "NAMSI": "EQUIPMENT", "BACH": "EQUIPMENT", "ALEXANDRE": "EQUIPMENT", "MAIRE": "EQUIPMENT", "HAEUSSLER": "EQUIPMENT", "BLANCHET": "EQUIPMENT", "LORENZINI": "EQUIPMENT", "TRAMIER": "EQUIPMENT", "SOUIDI": "EQUIPMENT", "RIHANI": "EQUIPMENT", "Parot": "EQUIPMENT", "SELMI": "EQUIPMENT", "GODINEAU": "EQUIPMENT", "MEUNIER": "EQUIPMENT", "FOUQUET": "EQUIPMENT", "BARBIER": "EQUIPMENT", "MULLER": "EQUIPMENT", "SAINTOT": "EQUIPMENT","MOTET": "EQUIPMENT","GIMENES": "EQUIPMENT","BOUILLOUX": "EQUIPMENT",
+    "CROSNIER": "NH90", "SIMON": "NH90", "CHARLES": "NH90", "GARZETTI": "NH90", "COVES": "NH90", "VONGSAY": "NH90", "NAMSI": "NH90", "HERAUD": "NH90", "PAYAN": "NH90", "NAYL": "NH90", "CHEVALIER": "NH90", "GRANDREMY": "NH90", "AUBRIS": "NH90", "CHEVALIER-JAGOT": "NH90", "SARINENA": "NH90", "STAGNITTA": "NH90",
     "EVANGELOU": "MATERIAL", "BLIN": "MATERIAL", "LEGENTIL": "MATERIAL", "MARET": "MATERIAL", "DAVIN": "MATERIAL", "GAGNEAU": "MATERIAL", "FRAISSE": "MATERIAL", "BLANC": "MATERIAL", "LAURENT": "MATERIAL", "DURAND": "MATERIAL"
   };
 
@@ -605,7 +606,7 @@ function update_WIP_Routine(datas) {
         if (!isExcludedStandard) {
           compteursUniques[og].GLOBAL.add(caseId); 
           
-          let team = TEAMS_MAP[leaderName] || "UNKNOWN";
+          let team = TEAMS_MAP[leaderName.toUpperCase()] || "UNKNOWN";
           compteursUniques[og][team].add(caseId);
         }
       }
