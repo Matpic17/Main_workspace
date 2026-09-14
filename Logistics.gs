@@ -1,59 +1,52 @@
 // Cette fonction permet de lancer tous les scripts logistics d'un seul coup
 function main() {
-
   var pnToSol = generate_kpi_extract();
   obso_flag_cleaning(pnToSol);
-
 }
 
 function generate_kpi_extract() {
-
   var datas = get_data("log");
-  
   // --- 1. CONFIGURATION ---
   const IDX_PN_JOIN_KEY = 53;  // Col BA
   const IDX_SOL_JOIN_KEY = 64; // Col BL
   const IDX_SOL_STATE = 72;    // Col AB
   
   // Colonnes sources pour Scenario ID (nécessaire pour le pré-calcul)
-  // Je suppose que Scenario_ID est quelque part dans les headers. 
-  // S'il n'est pas trouvé par nom, il faudra vérifier son nom exact dans le source.
-  const SCENARIO_ID_HEADER_NAME = "Scenario_ID"; 
+  const SCENARIO_ID_HEADER_NAME = "Scenario_ID";
 
-  const LBO_HEADER_ID = "scenario.id"; 
-  const LBO_HEADER_TYPE = "lbo_scenario_data.lbo_type"; 
-  const LBO_HEADER_SUBTYPE = "lbo_scenario_data.lbo_subtype"; 
+  const LBO_HEADER_ID = "scenario.id";
+  const LBO_HEADER_TYPE = "lbo_scenario_data.lbo_type";
+  const LBO_HEADER_SUBTYPE = "lbo_scenario_data.lbo_subtype";
 
   // ORDRE MODIFIÉ : LBO insérés avant "Sizing_element"
   const FINAL_HEADERS_ORDERED = [
-    "Part_number", "Part_sap_designation", "Obso_flag", "Case_number", 
-    "Case_creation_date", "Case_description", "Case_review_date", 
-    "Obsolete_component", "Impact_on_repair_capability", "Case_category_code", 
-    "Case_status_code", "Obsolescence_gate_code", "Supplier_name", 
-    "Case_leader_last_name", "Scenario_type_code", "Scenario_title", 
-    "Scenario_description", 
+    "Part_number", "Part_sap_designation", "Obso_flag", "Case_number",
+    "Case_creation_date", "Case_description", "Case_review_date",
+    "Obsolete_component", "Impact_on_repair_capability", "Case_category_code",
+    "Case_status_code", "Obsolescence_gate_code", "Supplier_name",
+    "Case_leader_last_name", "Scenario_type_code", "Scenario_title",
+    "Scenario_description",
     "SCENARIO_LBO_type",     // <--- DÉPLACÉ ICI
     "SCENARIO_LBO_subtype",  // <--- DÉPLACÉ ICI
-    "Sizing_element", "Prev_lbo_cost", 
-    "Group_initial_shortage_date", "Group_new_shortage_date", "PN_initial_shortage_date", "PN_new_shortage_date", 
-    "Group_name", "Program", "Variant", "Solution_decision_date", "Solution_decision_maker", 
-    "Solution_decision_comment", "Solution_state", "Solution_status", 
-    "Implementation_type_code", "Implementation_first_field_value", 
-    "Implementation_status", "PN_Group_ID", "SOL_Group_ID", 
+    "Sizing_element", "Prev_lbo_cost",
+    "Group_initial_shortage_date", "Group_new_shortage_date", "PN_initial_shortage_date", "PN_new_shortage_date",
+    "Group_name", "Program", "Variant", "Solution_decision_date", "Solution_decision_maker",
+    "Solution_decision_comment", "Solution_state", "Solution_status",
+    "Implementation_type_code", "Implementation_first_field_value",
+    "Implementation_status", "PN_Group_ID", "SOL_Group_ID",
     "Scenario_ID", "LBO_deadline", "Cause_category_code"
   ];
 
-
   // --- 2. PRÉPARATION DES DONNÉES ---
-  
+
   // A. Indexation Solution
   let solMap = new Map();
   let solData = datas.cases_solution_data;
   let solHeaders = solData[0];
-  
+
   for(let i = 1; i < solData.length; i++) {
     let row = solData[i];
-    let key = String(row[IDX_SOL_JOIN_KEY]).trim(); 
+    let key = String(row[IDX_SOL_JOIN_KEY]).trim();
     if(key) {
       if (!solMap.has(key)) solMap.set(key, []);
       solMap.get(key).push(row);
@@ -64,7 +57,7 @@ function generate_kpi_extract() {
   let lboMap = new Map();
   let lboData = datas.pn_lbo_data;
   let lboHeaders = lboData[0];
-  
+
   let idxLboId = lboHeaders.indexOf(LBO_HEADER_ID);
   let idxLboType = lboHeaders.indexOf(LBO_HEADER_TYPE);
   let idxLboSubtype = lboHeaders.indexOf(LBO_HEADER_SUBTYPE);
@@ -96,18 +89,14 @@ function generate_kpi_extract() {
     // -- CORRECTION 1 : Gestion manuelle des colonnes renommées --
     if (headerName === "PN_Group_ID") {
       idxPN = IDX_PN_JOIN_KEY; // On force l'index 52
-      // On laisse idxSOL à -1 car on veut cette info depuis le fichier PN
-    } 
+    }
     else if (headerName === "SOL_Group_ID") {
       idxSOL = IDX_SOL_JOIN_KEY; // On force l'index 63
-      // On laisse idxPN à -1 car on veut cette info depuis le fichier SOL
     }
-    // Pour les colonnes LBO, pas d'index source, c'est géré plus tard
     else if (headerName === "SCENARIO_LBO_type" || headerName === "SCENARIO_LBO_subtype") {
       // Index restent à -1
-    } 
+    }
     else {
-      // Cas standard
       idxPN = pnHeaders.indexOf(headerName);
       idxSOL = solHeaders.indexOf(headerName);
     }
@@ -115,23 +104,21 @@ function generate_kpi_extract() {
     colMapping.push({ name: headerName, idxPN: idxPN, idxSOL: idxSOL });
   });
 
-
   // --- 3. BOUCLE PRINCIPALE ---
-  
   let resultats = [];
   resultats.push(FINAL_HEADERS_ORDERED); // En-têtes dans le bon ordre
-  
+
   let pnData = datas.cases_partnumber_data;
-  
+
   for(let i = 1; i < pnData.length; i++) {
     let pnRow = pnData[i];
-    if(pnRow[69] == "") continue; 
+    if(pnRow[68] == "") continue;
 
     let joinKey = String(pnRow[IDX_PN_JOIN_KEY]).trim();
     let solutionsList = solMap.get(joinKey) || [];
     
     if (solutionsList.length === 0) {
-      solutionsList = [null]; 
+      solutionsList = [null];
     }
 
     for (let s = 0; s < solutionsList.length; s++) {
@@ -139,44 +126,36 @@ function generate_kpi_extract() {
 
       if (solRow) {
         let status = String(solRow[IDX_SOL_STATE]).trim();
-        if (status.toLowerCase() === "rejected") continue; 
+        if (status.toLowerCase() === "rejected") continue;
       }
 
       // -- CORRECTION 2 : PRÉ-CALCUL DU SCENARIO ID --
-      // On doit trouver l'ID tout de suite pour pouvoir remplir les colonnes LBO 
-      // qui arrivent au milieu de la boucle.
       let currentScenarioId = "";
       
-      // On cherche d'abord dans PN
       if (sourceIdxScenID_PN > -1) {
         currentScenarioId = String(pnRow[sourceIdxScenID_PN]).trim();
       }
-      // Sinon dans Solution (si vide dans PN et solution existe)
       if ((!currentScenarioId || currentScenarioId === "") && solRow && sourceIdxScenID_SOL > -1) {
         currentScenarioId = String(solRow[sourceIdxScenID_SOL]).trim();
       }
       
-      // On récupère les infos LBO associées
       let lboInfo = lboMap.get(currentScenarioId) || {type: "", subtype: ""};
-
 
       // -- CONSTRUCTION DE LA LIGNE --
       let newRow = [];
 
       colMapping.forEach(map => {
-        // Cas Spécial : Colonnes LBO (insérées au milieu)
         if (map.name === "SCENARIO_LBO_type") {
           newRow.push(lboInfo.type);
         }
         else if (map.name === "SCENARIO_LBO_subtype") {
           newRow.push(lboInfo.subtype);
         }
-        // Cas Standard : Récupération depuis PN ou SOL
         else {
           let val = "";
           if (map.idxPN > -1) {
             val = pnRow[map.idxPN];
-          } 
+          }
           else if (map.idxSOL > -1 && solRow) {
             val = solRow[map.idxSOL];
           }
@@ -187,7 +166,6 @@ function generate_kpi_extract() {
       resultats.push(newRow);
     }
   }
-
 
   // --- 4. CRÉATION FICHIER ---
   let now = new Date();
@@ -206,6 +184,7 @@ function generate_kpi_extract() {
     
     let sheet = newSS.getSheets()[0];
     if (resultats.length > 0) {
+      sheet.getRange("D:D").setNumberFormat("@");
       sheet.getRange(1, 1, resultats.length, resultats[0].length).setValues(resultats);
     }
     Logger.log("Fichier créé : " + fileName);
@@ -217,26 +196,150 @@ function generate_kpi_extract() {
   }
 }
 
-
 /**
  * Fonction d'analyse des règles de la logistic (R01 à R14).
  * Prend les données brutes, applique les règles et écrit dans l'onglet "Obso flag cleaning".
  */
 function obso_flag_cleaning(data) {
+  // On récupère les derniers fichiers du Drive
+  const latestFileIds = findLatestFiles(FOLDER_ID);
 
+  // Chargement de pn_to_sol (s'il n'est pas passé par main())
   if(!data) {
-    const latestFileIds = findLatestFiles(FOLDER_ID);
-    data = SpreadsheetApp.openById(latestFileIds.get("pn_to_sol")).getSheetByName("Feuille 1").getDataRange().getValues();
+    let pnToSolId = null;
+    for (let key of latestFileIds.keys()) {
+      if (key.includes("pn_to_sol")) {
+        pnToSolId = latestFileIds.get(key);
+        break;
+      }
+    }
+    if (pnToSolId) {
+      data = SpreadsheetApp.openById(pnToSolId).getSheetByName("Feuille 1").getDataRange().getValues();
+    } else {
+      Logger.log("❌ ERREUR : Fichier pn_to_sol introuvable.");
+      return;
+    }
   }
-  Logger.log("Extract chargé")
+  Logger.log("Extract pn_to_sol chargé");
+
+  // --- NOUVEAUTÉ : Chargement de cases_history DIRECTEMENT DEPUIS LE DOSSIER DRIVE ---
+  Logger.log("Recherche de cases_history directement dans le dossier Drive...");
+  
+  let historyId = null;
+  let closestDiff = Infinity;
+  let today = new Date().getTime();
+
+  // On contourne latestFileIds et on fouille tout le dossier complet
+  let folderMain = DriveApp.getFolderById(FOLDER_ID);
+  let filesIter = folderMain.getFiles();
+
+  while (filesIter.hasNext()) {
+    let file = filesIter.next();
+    let fileName = file.getName();
+    
+    // Si on trouve un fichier avec "cases_history" dans son nom
+    if (fileName.includes("cases_history")) {
+      let match = fileName.match(/\d{8}/);
+      
+      if (match) {
+        let dateStr = match[0];
+        let year = parseInt(dateStr.substring(0, 4), 10);
+        let month = parseInt(dateStr.substring(4, 6), 10) - 1;
+        let day = parseInt(dateStr.substring(6, 8), 10);
+        
+        let fileDate = new Date(year, month, day).getTime();
+        let diff = Math.abs(today - fileDate);
+        
+        // On garde celui qui a la date la plus proche d'aujourd'hui
+        if (diff < closestDiff) {
+          closestDiff = diff;
+          historyId = file.getId(); // On récupère le VRAI ID depuis Drive
+        }
+      } else if (!historyId) {
+        // Sécurité si aucune date n'est trouvée dans le nom
+        historyId = file.getId();
+      }
+    }
+  }
+
+  let validCasesForCleaning = new Set();
+  let pivotDate = new Date(2021, 11, 31, 23, 59, 59).getTime();
+
+  if (!historyId) {
+    Logger.log("❌ ERREUR CRITIQUE : Aucun fichier 'cases_history' trouvé dans latestFileIds.");
+  } else {
+    let historySheet = SpreadsheetApp.openById(historyId).getSheets()[0];
+    
+    // 1. On ne charge QUE la ligne 1 pour trouver les colonnes
+    let lastCol = historySheet.getLastColumn();
+    let lastRow = historySheet.getLastRow();
+    let headersHistory = historySheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    
+    let idxCaseId = headersHistory.indexOf("Case_number"); 
+    let idxDate = headersHistory.indexOf("Case_history_date"); 
+    let idxOG = headersHistory.indexOf("New_obsolescence_gate_code"); 
+    
+    Logger.log("Recherche des colonnes : Case=" + idxCaseId + " | Date=" + idxDate + " | OG=" + idxOG);
+
+    let caseMaxDates = new Map(); // Stockera la date OG1 la plus récente par Case
+    let countOG1 = 0;
+
+    if (idxCaseId > -1 && idxDate > -1 && idxOG > -1 && lastRow > 1) {
+      
+      let caseIdData = historySheet.getRange(2, idxCaseId + 1, lastRow - 1, 1).getValues();
+      let dateData = historySheet.getRange(2, idxDate + 1, lastRow - 1, 1).getValues();
+      let ogData = historySheet.getRange(2, idxOG + 1, lastRow - 1, 1).getValues();
+
+      // Extraction et conservation de la MAX date
+      for(let i = 0; i < (lastRow - 1); i++) {
+        let caseId = String(caseIdData[i][0]).trim();
+        let ogCode = String(ogData[i][0]).trim().toUpperCase();
+
+        if (ogCode === "OG1" && caseId !== "") {
+          countOG1++;
+          let dateVal = dateData[i][0];
+          let d = NaN;
+          
+          if (dateVal instanceof Date) {
+            d = dateVal.getTime();
+          } else if (typeof dateVal === "string" && dateVal.includes("/")) {
+            let datePart = dateVal.split(" ")[0]; 
+            let parts = datePart.split("/");
+            if(parts.length >= 3) {
+              let year = parseInt(parts[2], 10);
+              if (year < 100) year += 2000;
+              d = new Date(year, parseInt(parts[1], 10) - 1, parseInt(parts[0], 10)).getTime();
+            }
+          } else {
+            d = new Date(dateVal).getTime();
+          }
+
+          if (!isNaN(d)) {
+            let currentMax = caseMaxDates.get(caseId) || 0;
+            if (d > currentMax) {
+              caseMaxDates.set(caseId, d);
+            }
+          }
+        }
+      }
+
+      // Validation stricte : la dernière date doit être > 2021
+      caseMaxDates.forEach((maxDate, caseId) => {
+        if (maxDate > pivotDate) {
+          validCasesForCleaning.add(caseId);
+        }
+      });
+      Logger.log("✅ " + validCasesForCleaning.size + " Cases ID validés (Dernière OG1 > 2021) sur " + caseMaxDates.size + " uniques avec OG1.");
+    } else {
+      Logger.log("ERREUR CRITIQUE : Colonnes introuvables ou fichier cases_history vide !");
+    }
+  }
 
   // --- 1. CONFIGURATION ---
   const SS_ID = "1avjOXCrwPr58AmI9mSTtPzaqvXNkl1lou3pSmMYkJeo";
   const TARGET_SHEET_NAME = "Obso flag cleaning";
-  
-  const DUPLICATE_LINES = true; 
+  const DUPLICATE_LINES = false;
 
-  // Noms des colonnes
   const COL_PN = "Part_number";
   const COL_CAT = "Case_category_code";
   const COL_STATUS = "Case_status_code";
@@ -246,22 +349,22 @@ function obso_flag_cleaning(data) {
   const COL_GROUP_ID = "PN_Group_ID";
   const COL_FLAG = "Obso_flag";
   const COL_SOLUTION_STATE = "Solution_state";
+  const COL_CAUSE_CAT = "Cause_category_code";
 
-  // Listes de référence
   const STATUS_CLOSED_LIST = ["SOLVED", "CANCEL", "CLOSED"];
   const STATUS_R01_LIST = ["ALERT", "CANCEL"];
+  const EXCEPTIONS_R02_R03_R05_LIST = ["CANCEL", "CLOSED", "ALERT"];
   const CAT_EQUIPMENT_STARTS = ["EQUIPEMENT", "EQUIPMENT", "AIRFRAME ITEM", "TOOLS"];
 
   // --- 2. PRÉPARATION ---
   var ss = SpreadsheetApp.openById(SS_ID);
   var cleaning_sheet = ss.getSheetByName(TARGET_SHEET_NAME);
-  
+
   if (!cleaning_sheet) {
     SpreadsheetApp.getUi().alert("Erreur : Onglet '" + TARGET_SHEET_NAME + "' introuvable.");
     return;
   }
 
-  // Mapping des index
   var headers = data[0];
   var idx = {
     pn: headers.indexOf(COL_PN),
@@ -272,16 +375,16 @@ function obso_flag_cleaning(data) {
     dateNew: headers.indexOf(COL_DATE_NEW),
     groupId: headers.indexOf(COL_GROUP_ID),
     flag: headers.indexOf(COL_FLAG),
-    state: headers.indexOf(COL_SOLUTION_STATE)
+    state: headers.indexOf(COL_SOLUTION_STATE),
+    cause: headers.indexOf(COL_CAUSE_CAT)
   };
 
-  // Regroupement par PN
   var col = new Map();
   for(let i = 1; i < data.length; i++){
     let row = data[i];
-    let key = String(row[idx.pn]).trim(); 
+    let key = String(row[idx.pn]).trim();
     if(key && key !== "") {
-      if (!col.has(key)) col.set(key, []); 
+      if (!col.has(key)) col.set(key, []);
       col.get(key).push(row);
     }
   }
@@ -289,91 +392,113 @@ function obso_flag_cleaning(data) {
   var pnToChange = [];
   var dateDuJour = new Date();
 
-  // --- 3. ANALYSE DES RÈGLES (Boucle sur chaque PN) ---
-  
-  col.forEach((rows, keyPN) => {
+  // --- 2.5 LOGIQUE R00 (SAP vs TOM) ---
+  const FOLDER_SAP_ID = "1JAD3mWlL8Q19wzbFhU6CFCifoFBNvzTv"; 
+  const folderSAP = DriveApp.getFolderById(FOLDER_SAP_ID);
+  const filesSAP = folderSAP.getFiles();
+
+  if (filesSAP.hasNext()) {
+    let fileSAP = filesSAP.next(); 
+    let sapSpreadsheet = SpreadsheetApp.openById(fileSAP.getId());
+    let sapSheet = sapSpreadsheet.getSheets()[0]; 
+    let lastRowSAP = sapSheet.getLastRow();
     
-    // -- A. CALCUL DES INDICATEURS POUR CE PN --
+    if (lastRowSAP > 1) {
+      let sapData = sapSheet.getRange("A2:A" + lastRowSAP).getValues(); 
+      let addedFromSAP = new Set(); 
+      
+      sapData.forEach(row => {
+        let sapPn = String(row[0]).trim().toUpperCase(); 
+        if (sapPn && sapPn !== "" && !col.has(sapPn) && !addedFromSAP.has(sapPn)) {
+          let newRow = new Array(headers.length).fill(""); 
+          newRow[idx.pn] = sapPn; 
+          let outputRow = [dateDuJour, ...newRow, "R00", "UNFLAG", "NA SAP"];
+          pnToChange.push(outputRow);
+          addedFromSAP.add(sapPn); 
+        }
+      });
+    } else {
+      Logger.log("Avertissement : Le fichier SAP est vide.");
+    }
+  } else {
+    Logger.log("Avertissement : Aucun fichier SAP trouvé.");
+  }
+
+  // --- 3. ANALYSE DES RÈGLES (Boucle sur chaque PN) ---
+  col.forEach((rows, keyPN) => {
     
     let isEqp = false;
     let hasOpenCase = false;
     let allStatusR01 = true;
-    let allSD9999 = true; 
+    let allSD9999 = true;
+    let sd9999withExceptions = true;
     let flag;
-    
+    let hasReach = false;
+    let allReach = true;
+    let hasAny9999 = false;
     let scenariosPresent = new Set();
-    
-    // Map pour l'analyse par groupe
-    // Structure : Map<GroupID, { has3F: bool, hasLBO: bool, has3F_9999: bool }>
-    let groupsAnalysis = new Map(); 
+    let groupsAnalysis = new Map();
 
     rows.forEach(row => {
       let cat = String(row[idx.cat] || "").trim().toUpperCase();
       let status = String(row[idx.status] || "").trim().toUpperCase();
       let scen = String(row[idx.scenario] || "").trim().toUpperCase();
       let groupId = String(row[idx.groupId] || "UNKNOWN_GROUP").trim();
-      let sol_state = String(row[idx.state] || "").trim();
+      let causeCat = String(row[idx.cause] || "").trim().toUpperCase();
       flag = String(row[idx.flag] || "NO").trim();
 
-      // Check Dates pour cette ligne
       let d1 = row[idx.dateInit];
       let d2 = row[idx.dateNew];
       let lineDate9999 = isDate9999(d1) || isDate9999(d2);
+      if (lineDate9999) hasAny9999 = true;
 
-      // 1. Indicators Globaux
       if (CAT_EQUIPMENT_STARTS.some(start => cat.startsWith(start))) isEqp = true;
       if (!STATUS_CLOSED_LIST.includes(status)) hasOpenCase = true;
       if (!STATUS_R01_LIST.includes(status)) allStatusR01 = false;
-      if (!lineDate9999) allSD9999 = false;
+      
+      if (causeCat === "REACH") {
+        hasReach = true;
+      } else {
+        allReach = false;
+      }
+
+      if (!lineDate9999) {
+        allSD9999 = false;
+        if (!EXCEPTIONS_R02_R03_R05_LIST.includes(status)) {
+          sd9999withExceptions = false;
+        }
+      }
 
       if (scen) scenariosPresent.add(scen);
 
-      // 2. Remplissage des données par Groupe
       if (!groupsAnalysis.has(groupId)) {
-        groupsAnalysis.set(groupId, { 
-            has3F: false, 
-            hasLBO: false, 
-            has3F_9999: false // Indicateur spécifique pour R03
-        });
+        groupsAnalysis.set(groupId, { has3F: false, hasLBO: false, has3F_9999: false });
       }
       let gData = groupsAnalysis.get(groupId);
-      
       if (scen === "3F") gData.has3F = true;
       if (scen === "LBO") gData.hasLBO = true;
-      
-      // Pour R03 : On vérifie si c'est un 3F AVEC la date 9999 sur la ligne
-      if (scen === "3F" && lineDate9999) {
-          gData.has3F_9999 = true;
-      }
+      if (scen === "3F" && lineDate9999) gData.has3F_9999 = true;
     });
 
     let scenarios = Array.from(scenariosPresent);
-    
-    // Helpers boolean
     const hasScenario = (s) => scenarios.includes(s);
     const noScenario = (s) => !scenarios.includes(s);
 
-
-    // -- LOGIQUE R02 (INTOUCHÉE selon demande) --
-    // Vérifier que TOUS les groupes ont 3F et LBO
     let isR02Valid = false;
     if (groupsAnalysis.size > 0) {
-      isR02Valid = true; 
+      isR02Valid = true;
       for (let gData of groupsAnalysis.values()) {
         if (! (gData.has3F && gData.hasLBO) ) {
           isR02Valid = false;
-          break; 
+          break;
         }
       }
     }
 
-    // -- LOGIQUE R03 (MISE À JOUR) --
-    // Vérifier que TOUS les groupes sont touchés par au moins un "3F avec SD 9999"
     let isR03Valid = false;
     if (groupsAnalysis.size > 0) {
-        isR03Valid = true; // On part du principe que c'est bon
+        isR03Valid = true; 
         for (let gData of groupsAnalysis.values()) {
-            // Si un groupe n'a pas son "3F à 9999", la R03 échoue pour tout le PN
             if (!gData.has3F_9999) {
                 isR03Valid = false;
                 break;
@@ -381,76 +506,73 @@ function obso_flag_cleaning(data) {
         }
     }
 
-
-    // -- B. APPLICATION DES RÈGLES (ORDRE STRICT) --
-    
     let ruleApplied = "";
     let action = "";
 
-    // --- RÈGLES "UNSET" (UNFLAG) ---
-
-    // R01
-    if (allStatusR01) {
-      ruleApplied = "R01"; action = "UNFLAG";
-    }
-    // R02 (Logic préservée : Groupes OK + allSD9999 global)
-    else if (isEqp && isR02Valid && allSD9999) {
-      ruleApplied = "R02"; action = "UNFLAG";
-    }
-    // R03 (Logic mise à jour : isEqp + Tous les groupes OK sur 3F_9999)
-    else if (isEqp && isR03Valid) { 
-      ruleApplied = "R03"; action = "UNFLAG";
-    }
-    // R04
-    else if (!isEqp && !hasOpenCase && hasScenario("QUALIFICATION") && noScenario("3F") && noScenario("REDESIGN")) {
-      ruleApplied = "R04"; action = "UNFLAG";
-    }
-    // R05
-    else if (!isEqp && allSD9999) {
-      ruleApplied = "R05"; action = "UNFLAG";
-    }
-
-    // --- RÈGLES "SET" (FLAG) ---
-
-    // R11
-    else if (hasOpenCase) {
-      ruleApplied = "R11"; action = "FLAG";
-    }
-    // R12
-    else if (isEqp && !hasOpenCase && noScenario("3F") === false) { 
+    // --- RÈGLES ---
+    if (allStatusR01) { ruleApplied = "R01"; action = "UNFLAG"; }
+    else if (isEqp && isR02Valid && sd9999withExceptions) { ruleApplied = "R02"; action = "UNFLAG"; }
+    else if (isEqp && isR03Valid && sd9999withExceptions) { ruleApplied = "R03"; action = "UNFLAG"; }
+    else if (!isEqp && !hasOpenCase && hasScenario("QUALIFICATION") && noScenario("3F") && noScenario("REDESIGN")) { ruleApplied = "R04"; action = "UNFLAG"; }
+    else if (!isEqp && sd9999withExceptions && hasAny9999) { ruleApplied = "R05"; action = "UNFLAG"; }
+    else if (allReach) { ruleApplied = "R06"; action = "UNFLAG"; }
+    else if (hasOpenCase) { ruleApplied = "R11"; action = "FLAG"; }
+    else if (isEqp && !hasOpenCase) {
       let hasCaseWithout3F = rows.some(r => String(r[idx.scenario]).trim().toUpperCase() !== "3F");
-      if (hasCaseWithout3F) {
-        ruleApplied = "R12"; action = "FLAG";
-      }
+      if (hasCaseWithout3F) { ruleApplied = "R12"; action = "FLAG"; }
     }
-    // R13
     else if (!isEqp && !hasOpenCase) {
        let hasCaseWithoutQualif = rows.some(r => String(r[idx.scenario]).trim().toUpperCase() !== "QUALIFICATION");
-       if (hasCaseWithoutQualif) {
-         ruleApplied = "R13"; action = "FLAG";
-       }
+       if (hasCaseWithoutQualif) { ruleApplied = "R13"; action = "FLAG"; }
     }
-    // R14
     else if (!hasOpenCase && hasScenario("LBO") && noScenario("3F") && noScenario("QUALIFICATION")) {
       ruleApplied = "R14"; action = "FLAG";
     }
 
-    // Gestion de l'écrasement si déjà bon
     if((flag == "YES" && action == "FLAG") || (flag == "NO" && action == "UNFLAG")){
       ruleApplied = ""
-    };
+    }
 
-    // -- C. ENREGISTREMENT --
+    // -- C. ENREGISTREMENT ET STATUT CLEANING (CORRIGÉ POUR LE PN ENTIER ET IGNORANT CANCEL/ALERT) --
     if (ruleApplied !== "") {
       let linesToPush = DUPLICATE_LINES ? rows : [rows[0]];
+      let idxCase = headers.indexOf("Case_number");
+      
+      let isPnCleaningOk = true; 
+      let hasAtLeastOneCase = false;
+      
+      if (idxCase > -1) {
+        for (let r of rows) { 
+          let caseNumber = String(r[idxCase]).trim();
+          let currentStatus = String(r[idx.status] || "").trim().toUpperCase();
+          
+          if (caseNumber !== "") {
+            hasAtLeastOneCase = true;
+            
+            // NOUVEAU : On ignore l'évaluation pour les statuts CANCEL et ALERT
+            if (currentStatus !== "CANCEL" && currentStatus !== "ALERT") {
+              if (!validCasesForCleaning.has(caseNumber)) {
+                isPnCleaningOk = false;
+                break; // Un cas invalide suffit pour recaler tout le PN
+              }
+            }
+          }
+        }
+      }
+      
+      // Sécurité : si aucun Case Number n'est trouvé, le PN est NOK
+      if (!hasAtLeastOneCase) {
+        isPnCleaningOk = false;
+      }
+
+      // Application aux lignes
       linesToPush.forEach(row => {
-        let outputRow = [dateDuJour, ...row, ruleApplied, action];
+        let cleaningStatus = isPnCleaningOk ? "Cleaning OK" : "Cleaning NOK"; 
+        let outputRow = [dateDuJour, ...row, ruleApplied, action, cleaningStatus];
         pnToChange.push(outputRow);
       });
     }
-
   });
-
 
   Logger.log("Chargement des données dans le fichier...")
   // --- 4. ÉCRITURE ---
@@ -459,148 +581,6 @@ function obso_flag_cleaning(data) {
     cleaning_sheet.getRange(lastRow + 1, 1, pnToChange.length, pnToChange[0].length).setValues(pnToChange);
     Logger.log(pnToChange.length + " lignes ajoutées.");
   } else {
-    Logger.log("Aucun résultat.");
+    Logger.log("Aucun résultat à enregistrer.");
   }
-}
-
-/**
- * Helper pour vérifier si une date correspond à 31.12.9999
- */
-function isDate9999(val) {
-  if (!val || val == "") return false;
-  if (Object.prototype.toString.call(val) === '[object Date]') {
-    return val.getFullYear() === 9999 && val.getDate() === 31 && val.getMonth() === 11;
-  }
-  let s = String(val);
-  return s.includes("9999") && s.includes("12") && s.includes("31");
-}
-
-
-function inOutWip_PN_flagued(){
-
-  var ss = SpreadsheetApp.openById("1avjOXCrwPr58AmI9mSTtPzaqvXNkl1lou3pSmMYkJeo");
-  var sheet = ss.getSheetByName("IN OUT WIP PN");
-
-  var lastRow = sheet.getLastRow();
-
-  const latestFileIds = findLatestFiles(FOLDER_ID);
-  var pn_solution = SpreadsheetApp.openById(latestFileIds.get("pn_to_sol"));
-  Logger.log(pn_solution.getName())
-  var pn_solution_last_month = getPreviousMonthFile();
-
-  if(!pn_solution) throw Error("Pas de PN to solution dans le dossier fourni");
-
-  var pn_solution_data = pn_solution.getSheets()[0].getDataRange().getValues();
-  var pn_solution_last_month_data = SpreadsheetApp.open(pn_solution_last_month).getSheets()[0].getDataRange().getValues();
-
-  var pn_last_month = new Map();
-
-  pn_solution_last_month_data.forEach(row => {
-    if(!pn_last_month.has(row[0])){
-      pn_last_month.set(row[0].toString(), {flag: row[2]});
-    };
-  });
-
-  var pn = new Map();
-
-  pn_solution_data.forEach(row => {
-    if(!pn.has(row[0])){
-      pn.set(row[0].toString(), {flag: row[2]});
-    };
-  });
-
-  var pn_flag = [];
-  var flag_kpi = 0;
-  var unflag_kpi = 0;
-  var wip = pn.size - 1; // -1 Pour retirer l'entête dans le compte
-
-  pn.forEach((currentData, keyPN) => {
-
-    if(pn_last_month.has(keyPN)){
-      let flag_data = pn_last_month.get(keyPN);
-
-      if(flag_data.flag == "NO" && currentData.flag == "YES"){
-        flag_kpi += 1;
-      } else if(flag_data.flag == "YES" && currentData.flag == "NO"){
-        unflag_kpi += 1
-      } 
-    } else if(currentData.flag == "YES"){
-      flag_kpi += 1;
-    }
-  });
-
-  var option = {
-    year: "numeric",
-    month: "numeric",
-    day: "numeric"
-  };
-
-  var date = new Date().toLocaleString("fr-FR", option)
-  
-  pn_flag.push([date, flag_kpi, unflag_kpi, wip])
-
-  sheet.getRange(lastRow + 1, 1, 1, 4).setValues(pn_flag)
-
-}
-
-function getPreviousMonthFile() {
-  
-  // 1. Calculer le mois et l'année cibles (Mois précédent)
-  const today = new Date();
-  // On se place au 1er du mois pour éviter les bugs de fin de mois (ex: 30 mars - 1 mois)
-  const targetDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-  
-  const targetMonth = targetDate.getMonth(); // 0 = Janvier, 11 = Décembre
-  const targetYear = targetDate.getFullYear();
-  
-  // Pour l'affichage log (ex: "01/2026")
-  const displayTarget = String(targetMonth + 1).padStart(2, '0') + "/" + targetYear;
-  Logger.log(`Recherche du fichier le plus ancien pour la période : ${displayTarget}`);
-
-  // 2. Récupération des fichiers dans le dossier
-  const folder = DriveApp.getFolderById(FOLDER_ID);
-  const files = folder.getFiles(); // On récupère tout et on filtre après
-  
-  let validFiles = [];
-
-  // 3. Filtrage : On ne garde que ceux qui correspondent au mois précédent
-  while (files.hasNext()) {
-    let file = files.next();
-    let name = file.getName();
-    
-    // Regex pour capturer la date : PN_to_SOL_(jour)/(mois)/(année)
-    // Group 1 = Jour, Group 2 = Mois, Group 3 = Année
-    let match = name.match(/pn_to_sol_(\d{4})(\d{2})(\d{2})/);
-    
-    if (match) {
-      let fileDay = parseInt(match[3], 10);
-      let fileMonth = parseInt(match[2], 10) - 1; // JS compte les mois de 0 à 11
-      let fileYear = parseInt(match[1], 10);
-      
-      // Si le fichier correspond au mois et à l'année recherchés
-      if (fileMonth === targetMonth && fileYear === targetYear) {
-        validFiles.push({
-          file: file,
-          day: fileDay,
-          fullDate: new Date(fileYear, fileMonth, fileDay) // Pour le tri
-        });
-      }
-    }
-  }
-
-  // 4. Vérification et Tri
-  if (validFiles.length === 0) {
-    throw new Error(`Aucun fichier "PN_to_SOL" trouvé pour le mois de ${displayTarget} dans le dossier.`);
-  }
-
-  // On trie par date croissante (Le plus ancien en premier : 01 < 05 < 20)
-  validFiles.sort((a, b) => a.fullDate - b.fullDate);
-  
-  // 5. Résultat
-  let oldestFile = validFiles[0].file;
-  Logger.log(`Fichier trouvé : ${oldestFile.getName()} (ID: ${oldestFile.getId()})`);
-  
-  // Retourne le fichier (objet DriveApp File)
-  // Tu peux utiliser return oldestFile.getId() si tu veux juste l'ID
-  return oldestFile;
 }
