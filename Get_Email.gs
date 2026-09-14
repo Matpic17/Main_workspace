@@ -1,4 +1,6 @@
 function GET_EMAIL(name) {
+
+  Utilities.sleep(2000)
   // Si la cellule est vide, on ne retourne rien
   if (!name || typeof name !== 'string' || name.trim() === '') {
     return ""; 
