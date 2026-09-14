@@ -245,7 +245,7 @@ function lbotest(datas){
     const appliedScenarios = scenarios.filter(row => row[72] === "Applied");
     
     const hasAppliedLBO_EOL = appliedScenarios.some(row => row[55] === "LBO" && row[57].toLowerCase().includes("eol"));
-    const hasAppliedLBO_BB = appliedScenarios.some(row => row[55] === "LBO" && row[57].toLowerCase().includes("bb"));
+    const hasAppliedLBO_BB = false; //appliedScenarios.some(row => row[55] === "LBO" && row[57].toLowerCase().includes("bb"));
     const hasOtherDefinitiveSolution = appliedScenarios.some(row => ["3F", "REDESIGN", "QUALIFICATION"].includes(row[55]));
     
     // ---- DÉBUT DES RÈGLES DE VÉRIFICATION ----
