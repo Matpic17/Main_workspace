@@ -1,317 +1,215 @@
-function statusToBeUpdated(datas){
+/**
+ * =============================================================================
+ *  OCL.gs — Filtres sur l'extract cases_solution (+ PN sans shortage date)
+ * =============================================================================
+ *  Chaque fonction reçoit `datas` (résultat de get_data) et renvoie un tableau
+ *  de lignes. Les données sources ne sont jamais modifiées (copie systématique).
+ * =============================================================================
+ */
 
-  var tmp = new DataFilter(datas.cases_solution_data.map(row => row.slice()));
-
-  var data = tmp.AddCriteria(72, state => state == "Applied" || state == "Proposed")
-  .AddCriteria(73, status => status == "To be updated")
-  //.AddCriteria(40, status => status != "CANCEL" && status != "CLOSED" && status != "STOCK")
-  .ApplyFilters()
-  .RemoveDuplicates(71)
-  .GetFilteredData(); // Filtrage sur les scenarios appliqués
-
-  return data;
-}
-
-function og4_og5_wout_scenario_applied(datas){
-
-  var scenario_not_applied = new DataFilter(datas.cases_solution_data.map(row => row.slice()));
-
-  var scenario_not_applied_data = scenario_not_applied
-    .AddCriteria(41, value => value == "IMPL" || value == "INVEST" || value == "QUALIF" || value == "ASSESS" || value == "STOCK")
-    .AddCriteria(44, og => og == "OG4" || og == "OG5" || og == "OG5a" || og == "OG5b" || og == "OG6")
+/**
+ * Scénarios Applied/Proposed dont le statut de solution est "To be updated".
+ * Onglet : "Not updated".
+ */
+function statusToBeUpdated(datas) {
+  const C = COLONNES.SOLUTION;
+  return new DataFilter(copierLignes_(datas.cases_solution_data))
+    .AddCriteria(C.SOLUTION_STATE, state => state === "Applied" || state === "Proposed")
+    .AddCriteria(C.SOLUTION_STATUS, status => status === "To be updated")
     .ApplyFilters()
-    .GetFilteredData()
-  ;
-
-  var subjectMap = new Map();
-
-  scenario_not_applied_data.forEach(row => {
-    const subject = row[1]; // Numéro de sujet (colonne index 1 B)
-    const solutionStateValue = row[72]; // Solution state (colonne index 73 BT)
-    const scenarioValue = row[55]; // scenario (colonne index 54 BC)
-
-    // Si le sujet n'est pas encore dans la map, l'ajouter avec un objet pour garder le statut de validité
-    if (!subjectMap.has(subject)) {
-      subjectMap.set(subject, { solution: true, applied: true, rows: [] });
-    }
-
-    // Ajouter la valeur de la colonne 30 à la liste des valeurs pour ce sujet
-    let subjectStatus = subjectMap.get(subject);
-
-    // Vérification des conditions pour chaque ligne :
-    if (scenarioValue == "") {
-      // Si une ligne ne respecte pas la condition, on marque le sujet comme non valide
-      subjectStatus.solution = false;
-    }
-
-    if (solutionStateValue == "Applied"){
-      subjectStatus.applied = false;
-    }
-
-    // Ajouter la ligne à l'ensemble des lignes de ce sujet
-    subjectStatus.rows.push(row);
-
-  });
-
-  let validSubjects = [];
-
-  // Vérifier chaque sujet dans la map
-  subjectMap.forEach((status, subject) => {
-    // Ajouter seulement les sujets qui sont toujours marqués comme valides
-    if (status.solution && status.applied) {
-      validSubjects.push(...status.rows);
-    }
-  });
-
-  var scenario_not_applied_filtered = new DataFilter(validSubjects).RemoveDuplicates(1).GetFilteredData();
-  
-  return scenario_not_applied_filtered;
-
+    .RemoveDuplicates(C.CLE_UNIQUE_NOT_UPDATED)
+    .GetFilteredData();
 }
 
+/**
+ * Cas OG4 à OG6 ouverts dont AUCUN scénario n'est "Applied" et dont TOUS les
+ * scénarios sont renseignés. Une ligne par cas.
+ * Onglet : "OG4-OG5 cases without scenario (not applied)" (avec case_wout_solution).
+ */
+function og4_og5_wout_scenario_applied(datas) {
+  const C = COLONNES.SOLUTION;
+  const candidats = new DataFilter(copierLignes_(datas.cases_solution_data))
+    .AddCriteria(C.STATUT, statut => CONFIG.STATUTS.OUVERTS.includes(statut))
+    .AddCriteria(C.OG, og => CONFIG.OG.OG4_A_OG6.includes(og))
+    .ApplyFilters()
+    .GetFilteredData();
+
+  const casValides = garderGroupesValides_(candidats, C.CASE_NUMBER,
+    row => !estVide_(row[C.SCENARIO_TYPE]) && row[C.SOLUTION_STATE] !== "Applied");
+
+  return new DataFilter(casValides).RemoveDuplicates(C.CASE_NUMBER).GetFilteredData();
+}
+
+/**
+ * Cas OG4 à OG6 (depuis 2021, hors REACH et CANCEL) dont AUCUN scénario n'est
+ * renseigné. Une ligne par cas.
+ */
 function case_wout_solution(datas) {
+  const C = COLONNES.SOLUTION;
+  const candidats = new DataFilter(copierLignes_(datas.cases_solution_data))
+    .AddCriteria(C.CAUSE_CATEGORY, cause => cause !== "reach")
+    .AddCriteria(C.STATUT, statut => statut !== "CANCEL")
+    .AddCriteria(C.OG, og => CONFIG.OG.OG4_A_OG6.includes(og))
+    .AddCriteria(C.CASE_NUMBER, cas => anneeDuCas_(cas) > 20 && formatCasValide_(cas))
+    .ApplyFilters()
+    .GetFilteredData();
 
-  var case_without_solution = new DataFilter(datas.cases_solution_data.map(row => row.slice())).AddCriteria(37, cause => cause !== "reach").AddCriteria(41, value => value !== "CANCEL").AddCriteria(44, og => og == "OG4" || og == "OG5" || og == "OG5a" || og == "OG5b" || og == "OG6").AddCriteria(1, cas => parseInt(cas.substring(0, 2)) > 20 && cas.substring(3).length == 6).ApplyFilters().GetFilteredData();
+  const casSansScenario = garderGroupesValides_(candidats, C.CASE_NUMBER, row => row[C.SCENARIO_TYPE] === "");
 
-  var subjectsolutionMap = new Map();
-
-  case_without_solution.forEach(row => {
-    const subject = row[1]; // Numéro de sujet (column index 1)
-    const solutionValue = row[55]; // Solution (column index 54)
-
-    // Si le sujet n'est pas encore dans la map, l'ajouter avec un objet pour garder le statut de validité
-    if (!subjectsolutionMap.has(subject)) {
-      subjectsolutionMap.set(subject, { valid: true, rows: [] });
-    }
-
-    // Ajouter la valeur de la colonne 30 à la liste des valeurs pour ce sujet
-    let subjectStatus = subjectsolutionMap.get(subject);
-
-    // Vérification des conditions pour chaque ligne
-    if (solutionValue !== "") {
-      // Si une ligne ne respecte pas la condition, on marque le sujet comme non valide
-      subjectStatus.valid = false;
-    }
-
-    // Ajouter la ligne à l'ensemble des lignes de ce sujet
-    subjectStatus.rows.push(row);
-
-    // Mettre à jour le statut du sujet dans la map
-    subjectsolutionMap.set(subject, subjectStatus);
-  });
-
-  var case_without_Solution_filtered = [];
-
-  // Vérifier chaque sujet dans la map
-  subjectsolutionMap.forEach((status, subject) => {
-    // Ajouter seulement les sujets qui sont toujours marqués comme valides
-    if (status.valid) {
-      case_without_Solution_filtered.push(...status.rows);
-    }
-  });
-
-  var case_without_scenario = new DataFilter(case_without_Solution_filtered).RemoveDuplicates(1).GetFilteredData();
-
-  return case_without_scenario;
+  return new DataFilter(casSansScenario).RemoveDuplicates(C.CASE_NUMBER).GetFilteredData();
 }
 
-function case_wout_category_code(datas){
-
-  var case_category_code_data = new DataFilter(datas.cases_solution_data.map(row => row.slice()));
-
-  case_category_code_data
-  .AddCriteria(32, category => category == "")
-  .AddCriteria(41, value => value == "IMPL" || value == "INVEST" || value == "QUALIF" || value == "ASSESS" || value == "STOCK");
-
-  var case_category_code_filtered = case_category_code_data.ApplyFilters().RemoveDuplicates(1).GetFilteredData();
-
-  return case_category_code_filtered;
-  
+/**
+ * Cas ouverts sans Case_category_code. Onglet : "Case_category code (empty)".
+ */
+function case_wout_category_code(datas) {
+  const C = COLONNES.SOLUTION;
+  return new DataFilter(copierLignes_(datas.cases_solution_data))
+    .AddCriteria(C.CATEGORY_CODE, categorie => estVide_(categorie))
+    .AddCriteria(C.STATUT, statut => CONFIG.STATUTS.OUVERTS.includes(statut))
+    .ApplyFilters()
+    .RemoveDuplicates(C.CASE_NUMBER)
+    .GetFilteredData();
 }
 
-function pnWoutSD(datas){
+/**
+ * PN sans shortage date (ni nouvelle ni initiale) sur des cas ouverts hors OG0/OG1.
+ * Ajoute en dernière colonne la liste des scénarios "Applied" du groupe du PN,
+ * et exclut les PN dont un scénario appliqué est NOGO. Une ligne par cas.
+ * Onglet : "PnWoutSD".
+ *
+ * Correction : l'ancienne version sautait la 1re ligne de données des deux
+ * extracts (elle la prenait pour l'en-tête, déjà retiré par les filtres).
+ */
+function pnWoutSD(datas) {
+  const P = COLONNES.PARTNUMBER;
+  const S = COLONNES.SOLUTION;
 
-  var pn = new DataFilter(datas.cases_partnumber_data.map(row => row.slice()));
-  var solution = new DataFilter(datas.cases_solution_data.map(row => row.slice()));
+  // 1. PN concernés (en-tête exclu explicitement)
+  const lignesPN = new DataFilter(copierLignes_(datas.cases_partnumber_data.slice(1)))
+    .AddCriteria(P.STATUT, statut => !CONFIG.STATUTS.EXCLUS_RESUME.includes(statut))
+    .AddCriteria(P.OG, og => !CONFIG.OG.EXCLUS_PN_SANS_SD.includes(og))
+    .AddCriteria(P.PN_NEW_SD, sd => estVide_(sd))
+    .AddCriteria(P.PN_INITIAL_SD, sd => estVide_(sd))
+    .AddCriteria(P.PART_NUMBER, pn => !estVide_(pn))
+    .ApplyFilters()
+    .GetFilteredData();
 
-  var dataPN = pn.AddCriteria(41, status => status != "CANCEL" && status != "CLOSED" && status != "SOLVED" && status != "OnHOLD")
-  .AddCriteria(44, og => og != "OG0" && og != "OG1")
-  .AddCriteria(66, nsd => nsd == "")
-  .AddCriteria(67, isd => isd == "")
-  .AddCriteria(69, pn => pn != "")
-  .ApplyFilters()
-  .GetFilteredData();
+  // 2. Scénarios appliqués par groupe
+  const solutionsAppliquees = new DataFilter(copierLignes_(datas.cases_solution_data.slice(1)))
+    .AddCriteria(S.SOLUTION_STATE, state => state === "Applied")
+    .AddCriteria(S.GROUP_ID, groupe => !estVide_(groupe))
+    .ApplyFilters()
+    .GetFilteredData();
 
-  var dataSoluce = solution.AddCriteria(72, applied => applied == "Applied")
-  .AddCriteria(64, group => group != "")
-  .ApplyFilters()
-  .GetFilteredData();
-
-  const indexCleTableauPN = 53;
-  const indexCleTableauSoluce = 64;
-
-  const indiceColonneALierSoluce = 55;
-
-  const indexDonnees = new Map();
-  
-  // On parcourt tableau2 (en sautant l'en-tête à l'index 0)
-  for (let i = 1; i < dataSoluce.length; i++) {
-    const ligne = dataSoluce[i];
-    const cle = ligne[indexCleTableauSoluce];
-    const valeurALier = ligne[indiceColonneALierSoluce];
-    
-    // On s'assure que la clé et la valeur existent
-    if (cle && valeurALier) {
-      if (!indexDonnees.has(cle)) {
-        // 1. Clé vue pour la 1ère fois : on crée un nouveau tableau
-        indexDonnees.set(cle, [valeurALier]);
-      } else {
-        // 2. Clé déjà vue : on ajoute la valeur au tableau existant
-        indexDonnees.get(cle).push(valeurALier);
-      }
-    }
-  }
-
-  const tableauFinal = dataPN.map((ligne, index) => {
-    
-    // Cas spécial pour la ligne d'en-tête (index 0)
-    if (index === 0) {
-      const nouvelEnTete = dataSoluce[0][indiceColonneALierSoluce]; // ex: "Projet"
-      return ligne.concat(nouvelEnTete);
-    }
-    
-    // Pour toutes les autres lignes de données
-    const cle = ligne[indexCleTableauPN];
-    const donneesTrouvees = indexDonnees.get(cle); // ex: ["Projet A", "Projet C"]
-
-    if (donneesTrouvees) {
-      // Correspondance trouvée ! On joint le tableau avec une virgule et un espace.
-      const chaineConcaennee = donneesTrouvees.join(", ");
-      return ligne.concat(chaineConcaennee);
-    } else {
-      // Aucune correspondance. On ajoute une cellule vide.
-      return ligne.concat("");
+  const scenariosParGroupe = new Map();
+  solutionsAppliquees.forEach(row => {
+    const groupe = row[S.GROUP_ID];
+    const scenario = row[S.SCENARIO_TYPE];
+    if (groupe && scenario) {
+      if (!scenariosParGroupe.has(groupe)) scenariosParGroupe.set(groupe, []);
+      scenariosParGroupe.get(groupe).push(scenario);
     }
   });
 
-  var lastTableau_tmp = new DataFilter(tableauFinal.map(row => row.slice()));
+  // 3. Ajout de la colonne "scénarios du groupe", exclusion des NOGO, une ligne par cas
+  const resultat = [];
+  lignesPN.forEach(row => {
+    const scenarios = scenariosParGroupe.get(row[P.PN_GROUP_ID]);
+    const listeScenarios = scenarios ? scenarios.join(", ") : "";
+    if (!listeScenarios.includes("NOGO")) resultat.push(row.concat(listeScenarios));
+  });
 
-  var lastTableau = lastTableau_tmp.AddCriteria(112, sc => !sc.includes("NOGO"))
-  .ApplyFilters()
-  .RemoveDuplicates(0)
-  .GetFilteredData()
-
-  return lastTableau
-
+  return new DataFilter(resultat).RemoveDuplicates(P.CASE_ID).GetFilteredData();
 }
 
-function lbotest(datas){
+/**
+ * Contrôle de cohérence statut / OG / scénarios des cas OG4-OG5 (depuis 2019).
+ * Renvoie une ligne par (cas, anomalie) avec le libellé de l'anomalie en
+ * dernière colonne. Onglet : "OG4-OG5 status check".
+ * NB : le titre du scénario est passé en minuscules dans la sortie (comme avant).
+ */
+function lbotest(datas) {
+  const C = COLONNES.SOLUTION;
+  const SCENARIOS_TECHNIQUES = ["3F", "REDESIGN", "QUALIFICATION"];
+  const IMPL_TECHNIQUE_TERMINEE = ["6/6", "To be updated", "Migration Oct 24"];     // début du statut de solution
+  const LBO_FINALISE = ["8/9", "9/9", "To be updated", "Migration Oct 24"];          // début du statut de solution
+  const STATUTS_OG4_IMPL = ["IMPL", "QUALIF", "ASSESS"];
+  const commencePar = (valeur, prefixes) => prefixes.some(p => String(valeur || "").startsWith(p));
 
-  var tmp = datas.cases_solution_data.map(row => row.slice());
+  const lignes = new DataFilter(copierLignes_(datas.cases_solution_data))
+    .AddCriteria(C.CASE_NUMBER, cas => anneeDuCas_(cas) > 18 && formatCasValide_(cas))
+    .AddCriteria(C.OG, og => CONFIG.OG.OG4_OG5.includes(og))
+    .AddCriteria(C.STATUT, statut => !CONFIG.STATUTS.FERMES.includes(statut))
+    .ApplyFilters()
+    .GetFilteredData();
 
-  var tempo = new DataFilter(tmp)
-  .AddCriteria(1, cas => parseInt(String(cas).substring(0, 2)) > 18 && String(cas).substring(3).length == 6)
-  .AddCriteria(44, og => ["OG4", "OG5", "OG5a", "OG5b"].includes(og))
-  .AddCriteria(41, status => status != "CANCEL" && status != "CLOSED" && status != "SOLVED")
-  .ApplyFilters()
-  .GetFilteredData();
+  // Titre en minuscules (conservé dans la sortie, comme dans l'ancien code)
+  lignes.forEach(row => { row[C.SCENARIO_TITLE] = String(row[C.SCENARIO_TITLE]).toLowerCase(); });
 
-  let eol = tempo.map(row => {    
-    let lower = row[57].toLowerCase();
-    row[57] = lower;
-    return row;
+  // Regroupement par cas
+  const scenariosParCas = new Map();
+  lignes.forEach(row => {
+    const caseId = row[C.CASE_ID];
+    if (!scenariosParCas.has(caseId)) scenariosParCas.set(caseId, []);
+    scenariosParCas.get(caseId).push(row);
   });
 
-  const casesMap = new Map();
-  eol.forEach(row => {
-    const caseId = row[0];
-    if (!casesMap.has(caseId)) {
-      casesMap.set(caseId, []);
-    }
-    casesMap.get(caseId).push(row);
-  });
+  const anomalies = new Map();
 
-  const anomalyMap = new Map();
+  scenariosParCas.forEach((scenarios, caseId) => {
+    const raisons = [];
+    const caseOG = String(scenarios[0][C.OG]);
+    const caseStatus = scenarios[0][C.STATUT];
+    const appliques = scenarios.filter(row => row[C.SOLUTION_STATE] === "Applied");
 
-  // 3. ANALYSE DE CHAQUE CAS (logique corrigée)
-  casesMap.forEach((scenarios, caseId) => {
-    const anomalies = []; // Pour stocker les erreurs trouvées pour ce cas
-    
-    // Informations générales du cas (extraites de la première ligne)
-    const caseOG = scenarios[0][44];
-    const caseStatus = scenarios[0][41];
+    const aLboEolApplique = appliques.some(row =>
+      row[C.SCENARIO_TYPE] === "LBO" && (row[C.SCENARIO_TITLE].includes("eol") || row[C.SCENARIO_TITLE].includes("end of life")));
+    // (Règle "LBO BB" désactivée suite à la mise à jour des BR)
 
-    // On analyse tous les scénarios APPLIQUÉS du cas
-    const appliedScenarios = scenarios.filter(row => row[72] === "Applied");
-    
-    const hasAppliedLBO_EOL = appliedScenarios.some(row => row[55] === "LBO" && row[57].toLowerCase().includes("eol"));
-    const hasAppliedLBO_BB = false; //appliedScenarios.some(row => row[55] === "LBO" && row[57].toLowerCase().includes("bb"));
-    const hasOtherDefinitiveSolution = appliedScenarios.some(row => ["3F", "REDESIGN", "QUALIFICATION"].includes(row[55]));
-    
-    // ---- DÉBUT DES RÈGLES DE VÉRIFICATION ----
+    const aLboBBApplique = appliques.some(row =>
+      row[C.SCENARIO_TYPE] === "LBO" && (row[C.SCENARIO_TITLE].includes("bb") || row[C.SCENARIO_TITLE].includes("bridge buy") || row[C.SCENARIO_TITLE].includes("bridge-buy")));
 
     if (caseOG.startsWith("OG4")) {
-      // On vérifie d'abord s'il y a une implémentation technique (3F, Redesign...) EN COURS.
-      const hasOngoingTechnicalImpl = appliedScenarios.some(row => ["3F", "REDESIGN", "QUALIFICATION"].includes(row[55]) && !(String(row[73] || "").startsWith("6/6") || String(row[73] || "").startsWith("To be updated") || String(row[73] || "").startsWith("Migration Oct 24")) // Statut de solution différent de "6/6 - Implementation ended" ou statut to be update
-      );
+      const implTechniqueEnCours = appliques.some(row =>
+        SCENARIOS_TECHNIQUES.includes(row[C.SCENARIO_TYPE]) &&
+        !commencePar(row[C.SOLUTION_STATUS], IMPL_TECHNIQUE_TERMINEE));
 
-      if (hasOngoingTechnicalImpl) {
-        // Règle Prioritaire pour OG4 : Si une implémentation technique est en cours, le statut DOIT être IMPL ou QUALIF.
-        if (!["IMPL", "QUALIF", "ASSESS"].includes(caseStatus)) {
-          anomalies.push("Anomaly: OG4 with an technic implementation on going (3F/Redesign...) must have a IMPL or QUALIF status.");
+      if (caseStatus == "STOCK" && aLboBBApplique && !implTechniqueEnCours) {
+          raisons.push("Anomaly: OG4 with an technic implementation on going (3F/Redesign...) must have a IMPL or QUALIF status.");
         }
-      } else {
-        // Règle Secondaire pour OG4 : S'il n'y a PAS d'implémentation technique en cours, on vérifie les LBO.
-        if ((hasAppliedLBO_EOL || hasAppliedLBO_BB) && caseStatus !== "STOCK") {
-          anomalies.push("Anomaly: OG4 with an LBO (and without technic implementation on going) must have a stock status.");
+
+      if (implTechniqueEnCours) {
+        // Règle prioritaire OG4 : implémentation technique en cours → statut IMPL/QUALIF/ASSESS
+        if (!STATUTS_OG4_IMPL.includes(caseStatus)) {
+          raisons.push("Anomaly: OG4 with an technic implementation on going (3F/Redesign...) must have a IMPL or QUALIF status.");
         }
+      } else if (aLboEolApplique && caseStatus !== "STOCK") {
+        // Règle secondaire OG4 : LBO sans implémentation technique en cours → STOCK
+        raisons.push("Anomaly: OG4 with an LBO (and without technic implementation on going) must have a stock status.");
       }
     }
 
     if (caseOG.startsWith("OG5")) {
-      // Règle 4: Un LBO en OG5 ne doit pas être en cours d'implémentation.
-      // NOTE: J'ajoute la colonne 72 pour le statut de la solution (ex: "7/9..."). Adaptez l'index si besoin.
-      const isLBO_notFinalized = appliedScenarios.some(row => {
-          if (row[55] === "LBO") {
-              const solutionStatus = row[73] || ""; // ex: "7/9 - Partial or pending reception"
-              return !(solutionStatus.startsWith("8/9") || solutionStatus.startsWith("9/9") || solutionStatus.startsWith("To be updated") || solutionStatus.startsWith("Migration Oct 24"));
-          }
-          return false;
-      });
-      if (isLBO_notFinalized) {
-        anomalies.push("Anomaly: OG5 validated with an LBO not finalized (statut <> 8/9 ou 9/9).");
+      // Règle 4 : un LBO en OG5 doit être finalisé (8/9 ou 9/9)
+      const lboNonFinalise = appliques.some(row =>
+        row[C.SCENARIO_TYPE] === "LBO" && !commencePar(row[C.SOLUTION_STATUS], LBO_FINALISE));
+      if (lboNonFinalise) {
+        raisons.push("Anomaly: OG5 validated with an LBO not finalized (statut <> 8/9 ou 9/9).");
       }
-
-      // Règle 5: Un LBO EOL en OG5 doit avoir le statut STOCK.
-      if (hasAppliedLBO_EOL && caseStatus !== "STOCK") {
-        anomalies.push("Anomaly: OG5 with LBO EOL must have STOCK status.");
+      // Règle 5 : un LBO EOL en OG5 doit avoir le statut STOCK
+      if (aLboEolApplique && caseStatus !== "STOCK") {
+        raisons.push("Anomaly: OG5 with LBO EOL must have STOCK status.");
       }
-      
-      // Règle 6: Un cas en OG5 ne peut pas avoir un LBO BB comme seule solution.
-      /*if (hasAppliedLBO_BB && !hasOtherDefinitiveSolution && !hasAppliedLBO_EOL) {
-        anomalies.push("Anomaly: OG5 invalid because finalized with only an LBO BB (temporary solution).");
-      } Supprimé suite à mise à jour des BR*/ 
+      // (Règle 6 "LBO BB seul" supprimée suite à la mise à jour des BR)
     }
 
-    // Si des anomalies ont été trouvées, on ajoute le cas et ses scénarios au résultat.
-    if (anomalies.length > 0) {
-      // On prend la première ligne du cas comme ligne représentative
-      const representativeRow = scenarios[0]; 
-      
-      anomalies.forEach(reason => {
-        // On crée la clé primaire "N° Cas | Règle non respectée"
-        const anomalyKey = `${caseId} | ${reason}`;
-        
-        // Si cette anomalie précise n'a pas encore été ajoutée pour ce cas, on l'ajoute
-        if (!anomalyMap.has(anomalyKey)) {
-          let newRow = [...representativeRow]; // Copie de la ligne
-          newRow.push(reason); // Ajout du commentaire d'anomalie
-          anomalyMap.set(anomalyKey, newRow);
-        }
-      });
-    }
+    // Une ligne par anomalie, basée sur la 1re ligne du cas
+    raisons.forEach(raison => {
+      const cle = `${caseId} | ${raison}`;
+      if (!anomalies.has(cle)) anomalies.set(cle, [...scenarios[0], raison]);
+    });
   });
 
-  // On convertit les valeurs du Map (les lignes uniques) en un tableau pour le retour
-  return Array.from(anomalyMap.values());
+  return Array.from(anomalies.values());
 }
