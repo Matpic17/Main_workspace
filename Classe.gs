@@ -1,51 +1,70 @@
-//Classe permettant de faire des filtres sur les données pour les "ranger" dans les onglets
+/**
+ * =============================================================================
+ *  Classe.gs — DataFilter : filtres chaînables sur un tableau 2D
+ * =============================================================================
+ *  Utilisation :
+ *    new DataFilter(copierLignes_(data))
+ *      .AddCriteria(COLONNES.CAS.STATUT, s => s !== "CANCEL")
+ *      .ApplyFilters()
+ *      .RemoveDuplicates(COLONNES.CAS.CASE_NUMBER)
+ *      .GetFilteredData();
+ *
+ *  ⚠️ ApplyFilters() repart TOUJOURS des données d'origine : appeler
+ *     RemoveDuplicates() APRÈS ApplyFilters() (comme dans tout le projet).
+ *  ⚠️ Les lignes renvoyées sont les mêmes objets que ceux passés au
+ *     constructeur : passer une copie (copierLignes_) si on les modifie.
+ * =============================================================================
+ */
 class DataFilter {
-    constructor(data) {
-      this.data = data; // Base de données à filtrer (un tableau de tableaux)
-      this.criteria = []; // Liste des critères de filtrage
-      this.filteredData = [...data];
-    }
 
-    // Méthode pour ajouter un critère de filtrage
-    AddCriteria(columnIndex, filterFunction) {
-      this.criteria.push({
-        columnIndex: columnIndex, 
-        filterFunction: filterFunction
-      });
-      return this; // Permet d'enchaîner les appels
-    }
-
-    RemoveDuplicates(columnIndexForDupRemoval) {
-      const seen = new Set();
-      this.filteredData = this.filteredData.filter(row => {
-        const value = row[columnIndexForDupRemoval];
-        if (seen.has(value)) {
-          return false; // Si la valeur est déjà dans "seen", on ignore la ligne
-        } else {
-          seen.add(value); // Sinon, on ajoute la valeur à "seen" et conserve la ligne
-          return true;
-        }
-      });
-
-      return this; // Permet d'enchaîner les appels
-    }
-
-    // Méthode pour appliquer les critères de filtrage et supprimer les doublons
-    ApplyFilters() {
-      // Appliquer chaque critère à la base de données
-      this.filteredData = this.data.filter(row => {
-        return this.criteria.every(criterion => {
-          const columnIndex = criterion.columnIndex;
-          const filterFunction = criterion.filterFunction;
-          return filterFunction(row[columnIndex]);
-        });
-      });
-
-      return this; // Permet d'enchaîner les appels
-    }
-
-    // Récupère les données filtrées
-    GetFilteredData() {
-      return this.filteredData;
-    }
+  /** @param {Array<Array<*>>} data  tableau de lignes */
+  constructor(data) {
+    if (!Array.isArray(data)) throw new Error("DataFilter : les données doivent être un tableau de lignes.");
+    this.data = data;
+    this.criteria = [];
+    this.filteredData = [...data];
   }
+
+  /**
+   * Ajoute un critère : la ligne est gardée si filterFunction(row[columnIndex]) est vrai.
+   * @param {number} columnIndex  index base 0
+   * @param {function(*): boolean} filterFunction
+   * @returns {DataFilter}
+   */
+  AddCriteria(columnIndex, filterFunction) {
+    this.criteria.push({ columnIndex: columnIndex, filterFunction: filterFunction });
+    return this;
+  }
+
+  /**
+   * Garde la première ligne rencontrée pour chaque valeur de la colonne.
+   * @param {number} columnIndexForDupRemoval  index base 0
+   * @returns {DataFilter}
+   */
+  RemoveDuplicates(columnIndexForDupRemoval) {
+    const seen = new Set();
+    this.filteredData = this.filteredData.filter(row => {
+      const value = row[columnIndexForDupRemoval];
+      if (seen.has(value)) return false;
+      seen.add(value);
+      return true;
+    });
+    return this;
+  }
+
+  /**
+   * Applique TOUS les critères (ET logique) aux données d'origine.
+   * @returns {DataFilter}
+   */
+  ApplyFilters() {
+    this.filteredData = this.data.filter(row =>
+      this.criteria.every(criterion => criterion.filterFunction(row[criterion.columnIndex]))
+    );
+    return this;
+  }
+
+  /** @returns {Array<Array<*>>} */
+  GetFilteredData() {
+    return this.filteredData;
+  }
+}
