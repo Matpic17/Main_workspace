@@ -48,6 +48,9 @@ function import_extract() {
     filtres.forEach(filtre => {
       const lignes = resultats[filtre.onglet];
       pastInMain(filtre.onglet, filtre.plage, lignes);
+      if (filtre.enteteAjoutee && lignes.length > 0) {
+        nommerColonneSiVide_(getOngletObligatoire_(ss, filtre.onglet), lignes[0].length, filtre.enteteAjoutee);
+      }
       if (filtre.sujetResume) {
         pushInTotal(lignes, total, C.CL_PRENOM, C.CL_NOM, C.CASE_NUMBER, filtre.sujetResume, C.STATUT);
       }
@@ -65,7 +68,7 @@ function import_extract() {
 
     filtres.forEach(filtre => {
       if (filtre.ongletObsoManagement) charge_Obso_management(filtre.ongletObsoManagement, avecDate(resultats[filtre.onglet]));
-      if (filtre.ongletBDD) charge_BDD(filtre.ongletBDD, avecDate(resultats[filtre.onglet]), filtre.cle);
+      if (filtre.ongletBDD) charge_BDD(filtre.ongletBDD, avecDate(resultats[filtre.onglet]), filtre.cle, filtre.enteteAjoutee);
     });
     charge_BDD(CONFIG.ONGLETS.OCL_SUMMARY_RECAP, avecDate(oclSummary));
 
@@ -90,7 +93,9 @@ function import_extract() {
  *  ongletBDD            : onglet d'archive dans CONFIG.IDS.BDD_ARCHIVE (null = pas d'archive)
  *  cle                  : ce qui identifie une ligne d'une semaine à l'autre (colonne
  *                         "Nouveau / Existant" de l'archive ET décompte new/old des mails) :
- *                         "cas" | "cas+anomalie" | "scenario" | "cas+pn" (voir 02_Archive.gs)
+ *                         "cas" | "cas+anomalie" | "scenario" | "cas+pn" | "cas+groupe" (voir 02_Archives.gs)
+ *  enteteAjoutee        : nom de la colonne ajoutée en fin de ligne par le filtre (écrit en
+ *                         ligne 1 de l'onglet et de l'archive si la cellule est vide)
  *  ongletObsoManagement : onglet dans CONFIG.IDS.BDD_OBSO_MANAGEMENT (optionnel)
  *
  *  Filtres désactivés (fonctions toujours disponibles, dans Not_used.gs / OG0.gs) :
@@ -108,9 +113,9 @@ function getFiltresImport_() {
     { onglet: "OG4-OG5 status check", plage: "A2:CW", calcul: lbotest,
       sujetResume: "OG4-OG5 status check", ongletBDD: "OG4-OG5 status check", cle: "cas+anomalie" },
 
-    { onglet: "OG4-OG5 cases without scenario (not applied)", plage: "A2:CW",
-      calcul: datas => og4_og5_wout_scenario_applied(datas).concat(case_wout_solution(datas)),
-      sujetResume: "OG4-OG5 cases without scenario (not applied)", ongletBDD: "OG4-OG5 cases without scenario (not applied)", cle: "cas" },
+    { onglet: "OG4-OG5 cases without scenario (not applied)", plage: "A2:CW", calcul: casSansScenarioApplique_,
+      sujetResume: "OG4-OG5 cases without scenario (not applied)", ongletBDD: "OG4-OG5 cases without scenario (not applied)",
+      cle: "cas+groupe", enteteAjoutee: "Trinodes without solution" },
 
     { onglet: "Case_category code (empty)", plage: "A2:CW", calcul: case_wout_category_code,
       sujetResume: "Cases without category code", ongletBDD: "Case_category code (empty)", cle: "cas" },
@@ -136,6 +141,26 @@ function getFiltresImport_() {
     { onglet: "LBO_BB", plage: "A2:CW", calcul: lbo_bb_t1,
       sujetResume: null, ongletBDD: null, ongletObsoManagement: "LBO_BB" }
   ];
+}
+
+
+/**
+ * Onglet "OG4-OG5 cases without scenario (not applied)" :
+ *  1. les cas de og4_og5_wout_scenario_applied (tous les scénarios renseignés, aucun appliqué)
+ *     qui ne sont PAS déjà remontés par case_wout_solution ;
+ *  2. les groupes de case_wout_solution (une ligne par groupe, liste des trinodes sans
+ *     solution en dernière colonne).
+ * Les lignes du 1. reçoivent une dernière colonne vide pour que toutes les lignes aient
+ * la même largeur.
+ */
+function casSansScenarioApplique_(datas) {
+  const C = COLONNES.SOLUTION;
+  const groupes = case_wout_solution(datas);
+  const casDejaRemontes = new Set(groupes.map(row => texte_(row[C.CASE_NUMBER])));
+  const autresCas = og4_og5_wout_scenario_applied(datas)
+    .filter(row => !casDejaRemontes.has(texte_(row[C.CASE_NUMBER])))
+    .map(row => row.concat(""));
+  return autresCas.concat(groupes);
 }
 
 
@@ -229,10 +254,12 @@ function majOngletInfos_(datas) {
  * Ne fait rien si l'onglet a déjà été alimenté aujourd'hui.
  * @param {string} onglet
  * @param {Array<Array<*>>} donnee  lignes AVEC la date en colonne A
- * @param {string=} typeCle         si renseigné, ajoute la colonne "Nouveau / Existant" (voir 02_Archive.gs)
+ * @param {string=} typeCle         si renseigné, ajoute la colonne "Nouveau / Existant" (voir 02_Archives.gs)
+ * @param {string=} enteteAjoutee   nom de la dernière colonne de données (écrit en ligne 1 si vide)
  */
-function charge_BDD(onglet, donnee, typeCle) {
-  ajouterEnBDD_(CONFIG.IDS.BDD_ARCHIVE, "la BDD archive", onglet, donnee, { retirerFiltre: true, typeCle: typeCle });
+function charge_BDD(onglet, donnee, typeCle, enteteAjoutee) {
+  ajouterEnBDD_(CONFIG.IDS.BDD_ARCHIVE, "la BDD archive", onglet, donnee,
+    { retirerFiltre: true, typeCle: typeCle, enteteDerniereColonne: enteteAjoutee });
 }
 
 /** Archive des lignes en bas de l'onglet `onglet` de la BDD du Looker Obso management. */

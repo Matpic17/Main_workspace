@@ -107,7 +107,9 @@ const CONFIG = {
       "LMP_prio_empty"
     ],
     // Onglets pour lesquels le mail parle de "scenario(s)" au lieu de "case(s)" (en minuscules)
-    ONGLETS_LIBELLE_SCENARIO: ["not updated", "og4-og5 status check"]
+    ONGLETS_LIBELLE_SCENARIO: ["not updated", "og4-og5 status check"],
+    // Onglets pour lesquels le mail parle de "group(s)" (une ligne par groupe) (en minuscules)
+    ONGLETS_LIBELLE_GROUPE: ["og4-og5 cases without scenario (not applied)"]
   },
 
   // ---------------------------------------------------------------------------

@@ -15,6 +15,7 @@
  *    "cas+anomalie" → n° de cas + libellé "Anomaly: …"
  *    "scenario"     → ID du scénario (COLONNES.SOLUTION.SCENARIO_ID_MAIL)
  *    "cas+pn"       → n° de cas + part number
+ *    "cas+groupe"   → n° de cas + groupe (COLONNES.SOLUTION.GROUP_ID)
  * =============================================================================
  */
 
@@ -25,8 +26,9 @@
  * @param {string} libelle      pour le journal ("la BDD archive"…)
  * @param {string} onglet
  * @param {Array<Array<*>>} donnee  lignes AVEC la date en colonne A
- * @param {{retirerFiltre: boolean, typeCle: (string|undefined)}} options
+ * @param {{retirerFiltre: boolean, typeCle: (string|undefined), enteteDerniereColonne: (string|undefined)}} options
  *        typeCle renseigné → ajout de la colonne "Nouveau / Existant"
+ *        enteteDerniereColonne → nom écrit en ligne 1 au-dessus de la dernière colonne de données (si vide)
  */
 function ajouterEnBDD_(idClasseur, libelle, onglet, donnee, options) {
   const opts = options || {};
@@ -79,17 +81,21 @@ function ajouterEnBDD_(idClasseur, libelle, onglet, donnee, options) {
   if (drapeaux) {
     const derniereColonne = sheet.getLastColumn();
     const entetes = derniereColonne > 0 ? sheet.getRange(1, 1, 1, derniereColonne).getValues()[0] : [];
-    const index = entetes.indexOf(CONFIG.ARCHIVE.ENTETE_NOUVEAU);
+    const index = entetes.lastIndexOf(CONFIG.ARCHIVE.ENTETE_NOUVEAU);
     if (index >= 0 && index + 1 > largeur) {
       colonneDrapeau = index + 1;
+    } else if (index >= 0) {
+      // Les données sont devenues plus larges que l'emplacement de la colonne : on insère des
+      // colonnes AVANT elle, ce qui la décale vers la droite AVEC tout son historique.
+      const aInserer = largeur - index;
+      sheet.insertColumnsBefore(index + 1, aInserer);
+      colonneDrapeau = index + 1 + aInserer;
+      log_(`ℹ️ « ${onglet} » : ${aInserer} colonne(s) insérée(s) ; la colonne « ${CONFIG.ARCHIVE.ENTETE_NOUVEAU} » ` +
+           `passe de ${lettreColonne_(index)} à ${lettreColonne_(colonneDrapeau - 1)} (historique conservé).`);
     } else {
       let dernierEntete = 0;
       entetes.forEach((e, i) => { if (e !== "" && e !== null) dernierEntete = i + 1; });
       colonneDrapeau = Math.max(largeur, dernierEntete) + 1;
-      if (index >= 0) {
-        log_(`⚠️ « ${onglet} » : les données recouvrent maintenant l'ancienne colonne « ${CONFIG.ARCHIVE.ENTETE_NOUVEAU} » ` +
-             `(col ${lettreColonne_(index)}) → nouvelle colonne en ${lettreColonne_(colonneDrapeau - 1)}. Vérifier les sources Looker.`);
-      }
       assurerNombreColonnes_(sheet, colonneDrapeau);
       sheet.getRange(1, colonneDrapeau).setValue(CONFIG.ARCHIVE.ENTETE_NOUVEAU);
     }
@@ -113,6 +119,7 @@ function ajouterEnBDD_(idClasseur, libelle, onglet, donnee, options) {
   sheet.getRange(ligneDepart, 1, donnee.length, largeur).setValues(donnee);
   sheet.getRange(ligneDepart, 1, donnee.length, 1).setNumberFormat(CONFIG.ARCHIVE.FORMAT_DATE);
   if (drapeaux) sheet.getRange(ligneDepart, colonneDrapeau, donnee.length, 1).setValues(drapeaux.map(d => [d]));
+  if (opts.enteteDerniereColonne) nommerColonneSiVide_(sheet, largeur, opts.enteteDerniereColonne);
 
   log_(`  • ${libelle} « ${onglet} » : ${donnee.length} ligne(s) ajoutée(s) à partir de la ligne ${ligneDepart}${detail}.`);
 }
@@ -146,7 +153,7 @@ function lireArchivePrecedente_(sheet) {
 
 /**
  * Clé d'identification d'une ligne (SANS la date en tête).
- * @param {string} typeCle  "cas" | "cas+anomalie" | "scenario" | "cas+pn"
+ * @param {string} typeCle  "cas" | "cas+anomalie" | "scenario" | "cas+pn" | "cas+groupe"
  * @param {Array<*>} row
  * @returns {string} "" si la ligne n'a pas d'identifiant
  */
@@ -159,6 +166,8 @@ function cleLigne_(typeCle, row) {
       return texte_(row[COLONNES.SOLUTION.SCENARIO_ID_MAIL]);
     case "cas+pn":
       return numeroCas ? numeroCas + " | " + texte_(row[COLONNES.PARTNUMBER.PART_NUMBER]) : "";
+    case "cas+groupe":
+      return numeroCas ? numeroCas + " | " + texte_(row[COLONNES.SOLUTION.GROUP_ID]) : "";
     default:
       return numeroCas;
   }
@@ -216,4 +225,10 @@ function dateDuJourMinuit_() {
 function assurerNombreColonnes_(onglet, derniereColonne) {
   const max = onglet.getMaxColumns();
   if (derniereColonne > max) onglet.insertColumnsAfter(max, derniereColonne - max);
+}
+
+/** Écrit `nom` en ligne 1 de la colonne `colonne` (base 1) si la cellule est vide. */
+function nommerColonneSiVide_(onglet, colonne, nom) {
+  const cellule = onglet.getRange(1, colonne);
+  if (cellule.getValue() === "") cellule.setValue(nom);
 }

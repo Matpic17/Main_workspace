@@ -24,7 +24,8 @@ function statusToBeUpdated(datas) {
 /**
  * Cas OG4 à OG6 ouverts dont AUCUN scénario n'est "Applied" et dont TOUS les
  * scénarios sont renseignés. Une ligne par cas.
- * Onglet : "OG4-OG5 cases without scenario (not applied)" (avec case_wout_solution).
+ * Onglet : "OG4-OG5 cases without scenario (not applied)", avec case_wout_solution
+ * (voir casSansScenarioApplique_ dans Main.gs).
  */
 function og4_og5_wout_scenario_applied(datas) {
   const C = COLONNES.SOLUTION;
@@ -41,11 +42,25 @@ function og4_og5_wout_scenario_applied(datas) {
 }
 
 /**
- * Cas OG4 à OG6 (depuis 2021, hors REACH et CANCEL) dont AUCUN scénario n'est
- * renseigné. Une ligne par cas.
+ * Groupes (cas OG4 à OG6 depuis 2021, hors REACH et CANCEL) dont AU MOINS UN
+ * TRINODE n'a pas de solution appliquée, SAUF si le groupe lui-même en a une.
+ *
+ *   - groupe   = n° de cas + SOLUTION.GROUP_ID
+ *   - trinode  = programme renseigné (SOLUTION.PROGRAMME) à l'intérieur du groupe ;
+ *                une ligne SANS programme porte une solution « de groupe »
+ *   - solution = scénario renseigné dont le Solution_state vaut "Applied"
+ *
+ * Un groupe sans aucun trinode et sans solution appliquée est aussi remonté
+ * (c'était le seul cas remonté par l'ancienne version).
+ *
+ * Renvoie UNE LIGNE PAR GROUPE (1re ligne du groupe dans l'extract) avec, en
+ * dernière colonne, la liste des trinodes sans solution ("No trinode" si le
+ * groupe n'a pas de trinode).
  */
 function case_wout_solution(datas) {
   const C = COLONNES.SOLUTION;
+  const SANS_TRINODE = "No trinode";
+
   const candidats = new DataFilter(copierLignes_(datas.cases_solution_data))
     .AddCriteria(C.CAUSE_CATEGORY, cause => cause !== "reach")
     .AddCriteria(C.STATUT, statut => statut !== "CANCEL")
@@ -54,9 +69,34 @@ function case_wout_solution(datas) {
     .ApplyFilters()
     .GetFilteredData();
 
-  const casSansScenario = garderGroupesValides_(candidats, C.CASE_NUMBER, row => row[C.SCENARIO_TYPE] === "");
+  // Regroupement : solution de groupe ? et, pour chaque trinode, solution appliquée ?
+  const groupes = new Map();
+  candidats.forEach(row => {
+    const cle = texte_(row[C.CASE_NUMBER]) + " | " + texte_(row[C.GROUP_ID]);
+    if (!groupes.has(cle)) groupes.set(cle, { premiereLigne: row, solutionDeGroupe: false, trinodes: new Map() });
+    const groupe = groupes.get(cle);
+    const appliquee = row[C.SOLUTION_STATE] === "Applied" && !estVide_(row[C.SCENARIO_TYPE]);
+    const programme = texte_(row[C.PROGRAMME]);
 
-  return new DataFilter(casSansScenario).RemoveDuplicates(C.CASE_NUMBER).GetFilteredData();
+    if (programme === "") {
+      if (appliquee) groupe.solutionDeGroupe = true;
+    } else {
+      groupe.trinodes.set(programme, groupe.trinodes.get(programme) === true || appliquee);
+    }
+  });
+
+  // Groupes à remonter
+  const resultat = [];
+  groupes.forEach(groupe => {
+    if (groupe.solutionDeGroupe) return;
+    const trinodesSansSolution = Array.from(groupe.trinodes.keys()).filter(p => !groupe.trinodes.get(p));
+    if (groupe.trinodes.size === 0) {
+      resultat.push(groupe.premiereLigne.concat(SANS_TRINODE));
+    } else if (trinodesSansSolution.length > 0) {
+      resultat.push(groupe.premiereLigne.concat(trinodesSansSolution.join(", ")));
+    }
+  });
+  return resultat;
 }
 
 /**

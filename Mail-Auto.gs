@@ -93,7 +93,8 @@ function envoyerRapportPersonnaliseParMail() {
         totalCases += d.total;
         total_issues += d.total;
         total_new += d.nouveaux;
-        const typeElement = CONFIG.MAIL.ONGLETS_LIBELLE_SCENARIO.includes(sheetName.toLowerCase()) ? "scenario(s)" : "case(s)";
+        const typeElement = CONFIG.MAIL.ONGLETS_LIBELLE_SCENARIO.includes(sheetName.toLowerCase()) ? "scenario(s)"
+          : (CONFIG.MAIL.ONGLETS_LIBELLE_GROUPE || []).includes(sheetName.toLowerCase()) ? "group(s)" : "case(s)";
         lignesDeResume.push(`- ${d.total} ${typeElement} in the category "${sheetName}" (${texteNouveauxAnciens_(d)})`);
       }
 
